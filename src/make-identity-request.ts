@@ -1,3 +1,5 @@
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
 import nodeFetch from "node-fetch";
 
 const IDENTITY_URL = "https://te-stage2d0133.qa.paypal.com:15234/v1/mfsauth";
