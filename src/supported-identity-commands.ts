@@ -22,7 +22,7 @@ export const SUPPORTED_IDENTITY_COMMANDS: Tool[] = [
         .describe("Public-facing credential like email or phone"),
       intent: z
         .literal("MCP")
-        .describe("Use 'MCP' as the intent for this flow"),
+        .describe("Use 'MCP' as the intent for this flow, the default value is MCP if the user not provided"),
       merchant_name: z
         .string()
         .describe("The name of the merchant where the purchase is being made"),
@@ -31,5 +31,11 @@ export const SUPPORTED_IDENTITY_COMMANDS: Tool[] = [
         .positive()
         .describe("Transaction amount in the default currency (e.g., USD)")
     }
+  },
+  {
+    name: "list_products",
+    description: "Retrieves the list of available products in the merchant catalog.",
+    path: "/products/list",
+    schema: {}// No input needed, it's a simple GET-like behavior
   }
 ];

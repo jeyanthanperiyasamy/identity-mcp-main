@@ -1,12 +1,25 @@
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 import nodeFetch from "node-fetch";
+import https from "https";
 
-const IDENTITY_URL = "https://te-stage2d0133.qa.paypal.com:15234/v1/mfsauth";
-const NWS_API_BASE = "https://api.weather.gov";
+// const IDENTITY_URL = "http://localhost:3000";
+// const IDENTITY_URL = "https://www.stage2d0133.stage.paypal.com/v1/mfsauth"
+// const IDENTITY_URL = "https://api.sandbox.paypal.com/v1/mfsauth/user/generate-challenge"
+const IDENTITY_URL = "https://te-stage2d0133.qa.paypal.com:15234/v1/mfsauth"
+
+
+// Create an HTTPS agent that ignores invalid SSL certificates
+const httpsAgent = new https.Agent({
+  rejectUnauthorized: false,
+  secureProtocol: "TLS_method", // Allow any TLS version
+  ciphers: 'ALL',              // Allow all ciphers (including weak ones)
+  honorCipherOrder: true,   
+});
+
 const USER_AGENT = "weather-app/1.0";
 
-type ToolRequest = {
+export type ToolRequest = {
   command: string;
   body: any;
 };
@@ -15,21 +28,38 @@ export async function makeIdentityRequest({
   command,
   body,
 }: ToolRequest): Promise<any> {
-  const url = `${IDENTITY_URL}${command}`;
+  try {
+    const header = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'Authorization': 'Basic QVY5QThoQzlpdG4zUnBaLU9lU05LcTNPczl1NjBIbUZpMFIzS0NfQVlTWVlLd1AxbUhWSEJYREpJVDdpOg=='
+    }
+    const response = await axios.post(
+      'https://api.sandbox.paypal.com/v1/mfsauth/user/generate-challenge',
+      body,
+      {
+        headers: header
+      }
+    );
 
-  const response = await nodeFetch(url, {
-    method: "POST",
-    body: JSON.stringify(body),
-    headers: {
-      Accept: "application/json",
-      ["Content-Type"]: "application/json",
-      ["Client-Id"]: "identity-mcp",
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to call IDENTITY: ${response.status}`);
-  }
-
-  return response.json();
+    return {
+      content: [
+        {
+          type: "text",
+          text: { message: 'Success', data: response.data }
+        },
+      ],
+    };
+  
+    } catch (error) {
+      console.error('Error calling PayPal server:', error);
+      return {
+        content: [
+          {
+            type: "text",
+            text: { message: 'Error', error: String(error) }
+          },
+        ],
+      };
+    }
 }
