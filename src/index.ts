@@ -6,7 +6,7 @@ import { z } from "zod";
 import { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js';
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { generateChallengeAndSendPushNotification, waitForUserToAcceptThePushNotification } from "./make-identity-request.js";
+import { generateChallengeAndSendPushNotification, waitForUserToAcceptThePushNotification, checkoutCompletion } from "./make-identity-request.js";
 import { SUPPORTED_IDENTITY_COMMANDS } from "./supported-identity-commands.js";
 import registerTools from "./tools.js";
 
@@ -17,19 +17,26 @@ const server = new McpServer({
     resources: {},
     tools: {},
     logging: {},
-    prompts: { "identity_checkout_verification_flow": {
-      description: "Handles push-based verification and checkout flow",
-      instructions: `
-You are a identity based checkout assistant verifying a user's identity via push notification.
+    prompts: { 
+      identity_checkout_verification_flow: {
+        description: "Handles identity verification and checkout using push notifications.",
+        instructions: `
+You are an identity-based checkout assistant responsible for verifying the user via push notification.
 
-Call the tools in this order:
-1. generateChallengeAndSendPushNotificationParameters → get context_id
-2. use the context_id and intent  to make a Loop call waitForUserToAcceptThePushNotification for every 5 seconds for up to 10 times
-   - If status in response is "completed", proceed
-   - If status in response is "inprogress", continue poll
-   - If "error" or timeout, report failure
-3. Once approved, call complete_checkout with the same contextId
-`}
+Follow this sequence:
+
+1. Call 'list_products' to display a catalog of products
+
+2. Call the 'generateChallengeAndSendPushNotificationParameters' tool to initiate verification and retrieve the 'context_id'.
+
+3. Using the 'context_id' and 'intent', poll the 'waitForUserToAcceptThePushNotification' tool every 5 seconds, up to 1 minute:
+   - If the response status is "completed", proceed to the step 4
+   - If the status is "inprogress", continue polling.
+   - If the status is "error" or the operation times out, report a failure and exit the flow.
+
+4.  'complete_checkout' tool with the same 'context_id' to finalize the checkout process.
+        `.trim(),
+      },
     }
   },
 });
@@ -82,6 +89,8 @@ async function executeMethod(method: string, arg: any): Promise<any> {
       return MOCK_PRODUCTS;  
     case 'wait_for_user_verification':
       return waitForUserToAcceptThePushNotification(arg)
+      case 'complete_checkout':
+        return checkoutCompletion(arg)  
     default:
       throw new Error(`Invalid method: ${method}`);  
   }}

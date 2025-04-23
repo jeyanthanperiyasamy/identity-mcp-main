@@ -7,7 +7,9 @@ import https from "https";
 import debug from "debug";
 import { TypeOf } from "zod";
 
-import {generateChallengeAndSendPushNotificationParameters, waitForUserToAcceptThePushNotificationParameters} from "./supported-identity-commands.js"
+import {generateChallengeAndSendPushNotificationParameters, waitForUserToAcceptThePushNotificationParameters, completeCheckoutParameters} from "./supported-identity-commands.js"
+
+const contextStore: Record<string, { completed: boolean; token?: string }> = {};
 
 const logger = debug('make-identity-request');
 
@@ -24,6 +26,7 @@ const httpsAgent = new https.Agent({
   ciphers: 'ALL',              // Allow all ciphers (including weak ones)
   honorCipherOrder: true,   
 });
+
 
 const USER_AGENT = "weather-app/1.0";
 
@@ -49,6 +52,7 @@ interface GeneratePollingResult {
 }
 
 export async function generateChallengeAndSendPushNotification(params: TypeOf<ReturnType<typeof generateChallengeAndSendPushNotificationParameters>>): Promise<any> {
+  
   const headers = {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
@@ -62,7 +66,6 @@ export async function generateChallengeAndSendPushNotification(params: TypeOf<Re
   // const poll = await pollForCompletion(value)
 
   console.log(`Establishing SSE stream for session ${response}`)
-
   return response
 
   // try {
@@ -85,7 +88,7 @@ async function initiateChallenge(body: any, headers: any): Promise<GenerateChall
 }
 
 async function pollForCompletion(params: TypeOf<ReturnType<typeof waitForUserToAcceptThePushNotificationParameters>>): Promise<any> {
-  const maxPollingTimeMs = 50_000; // 50 seconds
+  const maxPollingTimeMs = 60_000; // 50 seconds
   const pollingIntervalMs = 5_000; // 5 seconds
   const startTime = Date.now();
 
@@ -93,6 +96,8 @@ async function pollForCompletion(params: TypeOf<ReturnType<typeof waitForUserToA
     const pollResponse = await waitForUserToAcceptThePushNotification(params);
     const status = pollResponse.status;
     if (status === 'completed') {
+      contextStore[params.context_id].completed = true;
+      contextStore[params.context_id].token = `mock-auth-token-${params.context_id}`;
       return pollResponse;
     }
     // wait for 5 seconds for the next poll
@@ -115,7 +120,24 @@ export async function waitForUserToAcceptThePushNotification(params: TypeOf<Retu
     );
 
     logger('Polling response received:', response.data);
+    if(response.data.status === "completed") {
+
+      if (!contextStore[params.context_id]) {
+        contextStore[params.context_id] = {
+          completed: true,
+          token: `mock-auth-token-${params.context_id}`,
+        };
+      }
+    }
     return response.data
+}
+
+export async function checkoutCompletion(params: TypeOf<ReturnType<typeof completeCheckoutParameters>>): Promise<{status: string}> {
+  const context = contextStore[params.context_id];
+  if (!context || !context.token ||context.token.length === 0) {
+    throw new Error(`Invalid token or token does not exist ${context?.completed ?? "error in completion"}, ${context?.token ?? "undefined token"}`);
+  }
+  return {status: `checkout_completed ${context.token}`}
 }
 
 function delay(ms: number): Promise<void> {
