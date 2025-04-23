@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+import { z } from "zod";
 
+import { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js';
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { makeIdentityRequest } from "./make-identity-request.js";
+import { generateChallengeAndSendPushNotification, waitForUserToAcceptThePushNotification } from "./make-identity-request.js";
 import { SUPPORTED_IDENTITY_COMMANDS } from "./supported-identity-commands.js";
 import registerTools from "./tools.js";
 
@@ -14,64 +16,84 @@ const server = new McpServer({
   capabilities: {
     resources: {},
     tools: {},
+    logging: {},
+    prompts: { "identity_checkout_verification_flow": {
+      description: "Handles push-based verification and checkout flow",
+      instructions: `
+You are a identity based checkout assistant verifying a user's identity via push notification.
+
+Call the tools in this order:
+1. generateChallengeAndSendPushNotificationParameters → get context_id
+2. use the context_id and intent  to make a Loop call waitForUserToAcceptThePushNotification for every 5 seconds for up to 10 times
+   - If status in response is "completed", proceed
+   - If status in response is "inprogress", continue poll
+   - If "error" or timeout, report failure
+3. Once approved, call complete_checkout with the same contextId
+`}
+    }
   },
 });
 
+
 registerTools(server)
 
-SUPPORTED_IDENTITY_COMMANDS.forEach((c) => {
-  server.tool(c.name, c.description, c.schema, async (args) => {
-    try {
-     if(c.name == "list_products") {
+
+SUPPORTED_IDENTITY_COMMANDS.forEach((tool) => {
+  server.tool(
+    tool.method,
+    tool.description,
+    tool.parameters.shape,
+    async (arg: any, _extra: RequestHandlerExtra<any, any>) => {
+      const result = await run(tool.method, arg);
       return {
         content: [
           {
-            type: "text",
-            text: `Success: ${JSON.stringify(MOCK_PRODUCTS)}`,
-          },
-        ],
-      };
-      
-     }
-     else {
-      const response = await makeIdentityRequest({
-        command: c.path && c.path.trim() !== "" ? c.path : c.name,
-        body: args,
-      });
-      const outcome = response?.outcomes?.[0]?.object;
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Success: ${JSON.stringify(outcome)}`,
+            type: 'text' as const,
+            text: String(result),
           },
         ],
       };
     }
-    } catch (err) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Error: ${err instanceof Error ? err.message : "Unknown"}`,
-          },
-        ],
-      };
-    }
-  });
+  );
 });
+
+
+async function run(method: string, arg: any): Promise<string> {
+  try {
+    console.log(`Establishing SSE stream for session ${arg}`)
+    const output = await executeMethod(method, arg);
+    return JSON.stringify(output);
+  } catch (error: any) {
+    const errorMessage = error.message || 'Unknown error';
+    return JSON.stringify({
+      error: {
+        message: errorMessage,
+        type: 'paypal_error',
+      },
+    });
+  }
+}
+
+async function executeMethod(method: string, arg: any): Promise<any> {
+  switch (method) {
+    case 'initiate_checkout_verification':
+      return generateChallengeAndSendPushNotification(arg);
+    case 'list_products':
+      return MOCK_PRODUCTS;  
+    case 'wait_for_user_verification':
+      return waitForUserToAcceptThePushNotification(arg)
+    default:
+      throw new Error(`Invalid method: ${method}`);  
+  }}
 
 async function main() {
   const transport = new StdioServerTransport();
-
   await server.connect(transport);
-
   console.error("Server successfully started");
 }
 
 main().catch((error) => {
   console.error("Failed to start server", error);
-
   process.exit(1);
 });
 

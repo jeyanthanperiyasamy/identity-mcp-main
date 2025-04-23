@@ -87,7 +87,6 @@ app.get("/sse", async (req: Request, res: Response) => {
 
 app.post("/message", async (req: Request, res: Response) => {
   console.log("Received message");
-
   await transport.handlePostMessage(req, res);
 });
 

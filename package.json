@@ -27,6 +27,7 @@
   "devDependencies": {
     "@types/axios": "^0.9.36",
     "@types/express": "^5.0.1",
+    "@types/debug": "^4.1.12",
     "@types/jsdom": "^21.1.7",
     "@types/node": "^22.13.14",
     "ts-node": "latest",

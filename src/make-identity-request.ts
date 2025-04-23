@@ -1,12 +1,20 @@
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+import axios from 'axios';
 
 import nodeFetch from "node-fetch";
 import https from "https";
 
+import debug from "debug";
+import { TypeOf } from "zod";
+
+import {generateChallengeAndSendPushNotificationParameters, waitForUserToAcceptThePushNotificationParameters} from "./supported-identity-commands.js"
+
+const logger = debug('make-identity-request');
+
 // const IDENTITY_URL = "http://localhost:3000";
 // const IDENTITY_URL = "https://www.stage2d0133.stage.paypal.com/v1/mfsauth"
-// const IDENTITY_URL = "https://api.sandbox.paypal.com/v1/mfsauth/user/generate-challenge"
-const IDENTITY_URL = "https://te-stage2d0133.qa.paypal.com:15234/v1/mfsauth"
+ const IDENTITY_URL = "https://api.sandbox.paypal.com/v1/mfsauth/user/generate-challenge"
+//const IDENTITY_URL = "https://te-stage2d0133.qa.paypal.com:15234/v1/mfsauth"
 
 
 // Create an HTTPS agent that ignores invalid SSL certificates
@@ -19,47 +27,122 @@ const httpsAgent = new https.Agent({
 
 const USER_AGENT = "weather-app/1.0";
 
-export type ToolRequest = {
+ type ToolRequest = {
   command: string;
   body: any;
 };
 
-export async function makeIdentityRequest({
-  command,
-  body,
-}: ToolRequest): Promise<any> {
-  try {
-    const header = {
+type PollRequest = {
+  command: string;
+  body: any;
+  schema: any
+};
+
+interface GenerateChallengeResult {
+  contextId: string;
+  objectType: string;
+}
+
+interface GeneratePollingResult {
+  status: string;
+  objectType: string;
+}
+
+export async function generateChallengeAndSendPushNotification(params: TypeOf<ReturnType<typeof generateChallengeAndSendPushNotificationParameters>>): Promise<any> {
+  const headers = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+    'Authorization': 'Basic QVY5QThoQzlpdG4zUnBaLU9lU05LcTNPczl1NjBIbUZpMFIzS0NfQVlTWVlLd1AxbUhWSEJYREpJVDdpOg==',
+  };
+
+  console.log(`Establishing SSE stream for session ${params}`)
+  const response = await initiateChallenge(params, headers);
+
+  // const value = {context_id: response.contextId, intent: "MCP-POLL"}
+  // const poll = await pollForCompletion(value)
+
+  console.log(`Establishing SSE stream for session ${response}`)
+
+  return response
+
+  // try {
+  //   const response = await initiateChallenge(body, headers);
+  //   //const pollResult = await pollForCompletion(contextId, headers);
+  //   return buildSuccessResponse(pollResult);
+  // } catch (error) {
+  //   logger('Error during identity workflow:', error);
+  //   return buildErrorResponse(error);
+  // }
+}
+
+async function initiateChallenge(body: any, headers: any): Promise<GenerateChallengeResult> {
+  const response = await axios.post<GenerateChallengeResult>(
+    'https://api.sandbox.paypal.com/v1/mfsauth/user/generate-challenge',
+    body,
+    { headers }
+  );
+  return response.data;
+}
+
+async function pollForCompletion(params: TypeOf<ReturnType<typeof waitForUserToAcceptThePushNotificationParameters>>): Promise<any> {
+  const maxPollingTimeMs = 50_000; // 50 seconds
+  const pollingIntervalMs = 5_000; // 5 seconds
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < maxPollingTimeMs) {
+    const pollResponse = await waitForUserToAcceptThePushNotification(params);
+    const status = pollResponse.status;
+    if (status === 'completed') {
+      return pollResponse;
+    }
+    // wait for 5 seconds for the next poll
+    await delay(pollingIntervalMs);
+  }
+  throw new Error('Polling timed out after 50 seconds');
+}
+
+export async function waitForUserToAcceptThePushNotification(params: TypeOf<ReturnType<typeof waitForUserToAcceptThePushNotificationParameters>>): Promise<GeneratePollingResult> {
+    const headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      'Authorization': 'Basic QVY5QThoQzlpdG4zUnBaLU9lU05LcTNPczl1NjBIbUZpMFIzS0NfQVlTWVlLd1AxbUhWSEJYREpJVDdpOg=='
-    }
-    const response = await axios.post(
-      'https://api.sandbox.paypal.com/v1/mfsauth/user/generate-challenge',
-      body,
-      {
-        headers: header
-      }
-    );
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: { message: 'Success', data: response.data }
-        },
-      ],
+      'Authorization': 'Basic QVY5QThoQzlpdG4zUnBaLU9lU05LcTNPczl1NjBIbUZpMFIzS0NfQVlTWVlLd1AxbUhWSEJYREpJVDdpOg==',
     };
   
-    } catch (error) {
-      console.error('Error calling PayPal server:', error);
-      return {
-        content: [
-          {
-            type: "text",
-            text: { message: 'Error', error: String(error) }
-          },
-        ],
-      };
-    }
+    const response = await axios.post<GeneratePollingResult>(
+      'https://api.sandbox.paypal.com/v1/mfsauth/user/generate-challenge',
+      params,
+      { headers }
+    );
+
+    logger('Polling response received:', response.data);
+    return response.data
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function buildSuccessResponse(data: any) {
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify({ message: 'Success', data }),
+      },
+    ],
+  };
+}
+
+function buildErrorResponse(error: unknown) {
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify({
+          message: 'Error',
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      },
+    ],
+  };
 }
