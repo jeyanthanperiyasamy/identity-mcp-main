@@ -32,14 +32,18 @@ S"Initiates the checkout process by sending a verification request (push notific
 
 export const waitForUserToAcceptThePushNotificationParameters = () =>
   z.object({
-    context_id: z.string().describe('context_id received from the generate challege'),
-    intent: z.string().describe("Use 'MCP-POLL' as the intent for this flow. Defaults to 'MCP-POLL' if not provided."),
+    context_id: z
+      .string()
+      .describe("The context_id received from the 'generate challenge' step."),
+    intent: z
+      .string()
+      .describe("Set this to 'MCP-POLL' for this flow. Defaults to 'MCP-POLL' if not provided."),
   });
 
-  export const waitForUserToAcceptThePushNotificationPrompt = () =>  "Waits for the status of a previously initiated verification request by polling every 5 seconds, with a maximum timeout of 30 seconds. " +
-  "This determines whether the customer has approved the request or if the operation remains pending. " +
-  "If no successful response is received within the timeout period, the system should treat it as a user timeout."
-;
+export const waitForUserToAcceptThePushNotificationPrompt = () =>
+  "Polls every 5 seconds for the status of a previously initiated verification request, with a maximum timeout of 2 minutes. " +
+  "This determines whether the user has approved the request or if the operation is still pending. " +
+  "If no successful response is received within the timeout period, the system should handle it as a user timeout.";
 
 export const completeCheckoutParameters = () =>
   z.object({

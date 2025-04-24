@@ -59,13 +59,13 @@ export async function generateChallengeAndSendPushNotification(params: TypeOf<Re
     'Authorization': 'Basic QVY5QThoQzlpdG4zUnBaLU9lU05LcTNPczl1NjBIbUZpMFIzS0NfQVlTWVlLd1AxbUhWSEJYREpJVDdpOg==',
   };
 
-  console.log(`Establishing SSE stream for session ${params}`)
+  // console.log(`Establishing SSE stream for session ${params}`)
   const response = await initiateChallenge(params, headers);
 
   // const value = {context_id: response.contextId, intent: "MCP-POLL"}
   // const poll = await pollForCompletion(value)
 
-  console.log(`Establishing SSE stream for session ${response}`)
+  // console.log(`Establishing SSE stream for session ${response}`)
   return response
 
   // try {
@@ -142,29 +142,4 @@ export async function checkoutCompletion(params: TypeOf<ReturnType<typeof comple
 
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-function buildSuccessResponse(data: any) {
-  return {
-    content: [
-      {
-        type: "text",
-        text: JSON.stringify({ message: 'Success', data }),
-      },
-    ],
-  };
-}
-
-function buildErrorResponse(error: unknown) {
-  return {
-    content: [
-      {
-        type: "text",
-        text: JSON.stringify({
-          message: 'Error',
-          error: error instanceof Error ? error.message : String(error),
-        }),
-      },
-    ],
-  };
 }

@@ -29,7 +29,7 @@ Follow this sequence:
 
 2. Call the 'generateChallengeAndSendPushNotificationParameters' tool to initiate verification and retrieve the 'context_id'.
 
-3. Using the 'context_id' and 'intent', poll the 'waitForUserToAcceptThePushNotification' tool every 5 seconds, up to 1 minute:
+3. Using the 'context_id' and 'intent', poll the 'waitForUserToAcceptThePushNotification' tool every 5 seconds, up to 2 minute:
    - If the response status is "completed", proceed to the step 4
    - If the status is "inprogress", continue polling.
    - If the status is "error" or the operation times out, report a failure and exit the flow.
@@ -67,7 +67,7 @@ SUPPORTED_IDENTITY_COMMANDS.forEach((tool) => {
 
 async function run(method: string, arg: any): Promise<string> {
   try {
-    console.log(`Establishing SSE stream for session ${arg}`)
+    // console.log(`Establishing SSE stream for session ${arg}`)
     const output = await executeMethod(method, arg);
     return JSON.stringify(output);
   } catch (error: any) {
